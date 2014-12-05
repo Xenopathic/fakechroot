@@ -100,26 +100,28 @@ wrapper(chroot, int, (const char * path))
         return -1;
     }
 
-    ld_library_path = getenv("LD_LIBRARY_PATH");
+	if (!getenv("FAKECHROOT_SYSTEM_BINS")) {
+        ld_library_path = getenv("LD_LIBRARY_PATH");
 
-    if (ld_library_path != NULL && strlen(ld_library_path) > 0) {
-        separator = ":";
+        if (ld_library_path != NULL && strlen(ld_library_path) > 0) {
+            separator = ":";
+        }
+        else {
+            ld_library_path = "";
+            separator = "";
+        }
+
+        len = strlen(ld_library_path)+strlen(separator)+strlen(path)*2+sizeof("/usr/lib:/lib");
+
+        if ((new_ld_library_path = malloc(len)) == NULL) {
+            __set_errno(ENOMEM);
+            return -1;
+        }
+
+        snprintf(new_ld_library_path, len, "%s%s%s/usr/lib:%s/lib", ld_library_path, separator, path, path);
+        setenv("LD_LIBRARY_PATH", new_ld_library_path, 1);
+        free(new_ld_library_path);
     }
-    else {
-        ld_library_path = "";
-        separator = "";
-    }
-
-    len = strlen(ld_library_path)+strlen(separator)+strlen(path)*2+sizeof("/usr/lib:/lib");
-
-    if ((new_ld_library_path = malloc(len)) == NULL) {
-        __set_errno(ENOMEM);
-        return -1;
-    }
-
-    snprintf(new_ld_library_path, len, "%s%s%s/usr/lib:%s/lib", ld_library_path, separator, path, path);
-    setenv("LD_LIBRARY_PATH", new_ld_library_path, 1);
-    free(new_ld_library_path);
 
     return 0;
 }

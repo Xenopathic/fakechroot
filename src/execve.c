@@ -34,6 +34,8 @@
 #include "setenv.h"
 #include "readlink.h"
 
+#define FAKECHROOT_MAX_EXECVE_RECURSION 5
+
 
 /* Parse the FAKECHROOT_CMD_SUBST environment variable (the first
  * parameter) and if there is a match with filename, return the
@@ -72,8 +74,14 @@ static int try_cmd_subst (char * env, const char * filename, char * cmd_subst)
     return 0;
 }
 
+static int do_execve(const char *, char * const *, char * const *, int);
 
 wrapper(execve, int, (const char * filename, char * const argv [], char * const envp []))
+{
+    return do_execve(filename, argv, envp, 0);
+}
+
+static int do_execve(const char * filename, char * const argv[], char * const envp[], int counter)
 {
     int status;
     int file;
@@ -94,14 +102,20 @@ wrapper(execve, int, (const char * filename, char * const argv [], char * const 
     unsigned int do_cmd_subst = 0;
     size_t sizeenvp;
     char c;
+    const char *orig_filename = filename;
 
     char *elfloader = getenv("FAKECHROOT_ELFLOADER");
     char *elfloader_opt_argv0 = getenv("FAKECHROOT_ELFLOADER_OPT_ARGV0");
 
-    if (elfloader && !*elfloader) elfloader = NULL;
-    if (elfloader_opt_argv0 && !*elfloader_opt_argv0) elfloader_opt_argv0 = NULL;
+    if (counter > FAKECHROOT_MAX_EXECVE_RECURSION) {
+        __set_errno(ELOOP);
+        return -1;
+    }
 
     debug("execve(\"%s\", {\"%s\", ...}, {\"%s\", ...})", filename, argv[0], envp ? envp[0] : "(null)");
+
+    if (elfloader && !*elfloader) elfloader = NULL;
+    if (elfloader_opt_argv0 && !*elfloader_opt_argv0) elfloader_opt_argv0 = NULL;
 
     strncpy(argv0, filename, FAKECHROOT_PATH_MAX);
 
@@ -222,9 +236,14 @@ wrapper(execve, int, (const char * filename, char * const argv [], char * const 
         return -1;
     }
 
+    if (getenv("FAKECHROOT_SYSTEM_BINS")) {
+        filename = orig_filename;
+    }
+
     /* No hashbang in argv */
     if (hashbang[0] != '#' || hashbang[1] != '!') {
         if (!elfloader) {
+            debug("nextcall(execve)(\"%s\", {\"%s\", ...}, {\"%s\", ...})", filename, argv[0], newenvp[0]);
             status = nextcall(execve)(filename, argv, newenvp);
             goto error;
         }
@@ -259,7 +278,6 @@ wrapper(execve, int, (const char * filename, char * const argv [], char * const 
             if (i > j) {
                 if (n == 0) {
                     ptr = &hashbang[j];
-                    expand_chroot_path(ptr);
                     strcpy(newfilename, ptr);
                 }
                 newargv[n++] = &hashbang[j];
@@ -278,32 +296,12 @@ wrapper(execve, int, (const char * filename, char * const argv [], char * const 
 
     newargv[n] = 0;
 
-    if (!elfloader) {
-        status = nextcall(execve)(newfilename, (char * const *)newargv, newenvp);
-        goto error;
-    }
-
-    /* Run via elfloader */
-    j = elfloader_opt_argv0 ? 3 : 1;
-    if (n >= argv_max - 1) {
-        n = argv_max - j - 1;
-    }
-    newargv[n+j] = 0;
-    for (i = n; i >= j; i--) {
-        newargv[i] = newargv[i-j];
-    }
-    n = 0;
-    newargv[n++] = elfloader;
-    if (elfloader_opt_argv0) {
-        newargv[n++] = elfloader_opt_argv0;
-        newargv[n++] = argv0;
-    }
-    newargv[n] = newfilename;
-    debug("nextcall(execve)(\"%s\", {\"%s\", \"%s\", \"%s\", ...}, {\"%s\", ...})", elfloader, newargv[0], newargv[1], newargv[n], newenvp[0]);
-    status = nextcall(execve)(elfloader, (char * const *)newargv, newenvp);
+    status = do_execve(newfilename, (char * const *)newargv, newenvp, counter+1);
 
 error:
     free(newenvp);
 
     return status;
 }
+
+

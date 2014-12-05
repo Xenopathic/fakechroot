@@ -57,26 +57,30 @@ done
 if [ -d "$fakechroot_chroot_newroot" ]; then
     fakechroot_chroot_newroot=`cd "$fakechroot_chroot_opt"; pwd -P`
 
-    fakechroot_chroot_paths=
+    if [ -z "$FAKECHROOT_SYSTEM_BINS" ]; then
+        fakechroot_chroot_paths=
 
-    # append newroot to each directory from original LD_LIBRARY_PATH
-    fakechroot_chroot_IFS_bak="$IFS" IFS=:
-    for fakechroot_chroot_d in $LD_LIBRARY_PATH; do
-        fakechroot_chroot_paths="${fakechroot_chroot_paths:+$fakechroot_chroot_paths:}$fakechroot_chroot_base$fakechroot_chroot_newroot/${fakechroot_chroot_d#/}"
-    done
-    IFS="$fakechroot_chroot_IFS_bak"
+        # append newroot to each directory from original LD_LIBRARY_PATH
+        fakechroot_chroot_IFS_bak="$IFS" IFS=:
+        for fakechroot_chroot_d in $LD_LIBRARY_PATH; do
+            fakechroot_chroot_paths="${fakechroot_chroot_paths:+$fakechroot_chroot_paths:}$fakechroot_chroot_base$fakechroot_chroot_newroot/${fakechroot_chroot_d#/}"
+        done
+        IFS="$fakechroot_chroot_IFS_bak"
 
-    # append newroot to each directory from new /etc/ld.so.conf
-    fakechroot_chroot_paths_ldsoconf=""
-    if [ -f "$fakechroot_chroot_newroot/etc/ld.so.conf" ]; then
-        fakechroot_chroot_paths_ldsoconf=`fakechroot_chroot_load_ldsoconf "/etc/ld.so.conf" "$fakechroot_chroot_newroot" | while read fakechroot_chroot_line; do printf ":%s%s" "$fakechroot_chroot_base" "$fakechroot_chroot_line"; done`
-    elif [ -d "$fakechroot_chroot_newroot/etc/ld.so.conf.d" ]; then
-        fakechroot_chroot_paths_ldsoconf=`fakechroot_chroot_load_ldsoconf "/etc/ld.so.conf.d/*" "$fakechroot_chroot_newroot" | while read fakechroot_chroot_line; do printf ":%s%s" "$fakechroot_chroot_base" "$fakechroot_chroot_line"; done`
+        # append newroot to each directory from new /etc/ld.so.conf
+        fakechroot_chroot_paths_ldsoconf=""
+        if [ -f "$fakechroot_chroot_newroot/etc/ld.so.conf" ]; then
+            fakechroot_chroot_paths_ldsoconf=`fakechroot_chroot_load_ldsoconf "/etc/ld.so.conf" "$fakechroot_chroot_newroot" | while read fakechroot_chroot_line; do printf ":%s%s" "$fakechroot_chroot_base" "$fakechroot_chroot_line"; done`
+        elif [ -d "$fakechroot_chroot_newroot/etc/ld.so.conf.d" ]; then
+            fakechroot_chroot_paths_ldsoconf=`fakechroot_chroot_load_ldsoconf "/etc/ld.so.conf.d/*" "$fakechroot_chroot_newroot" | while read fakechroot_chroot_line; do printf ":%s%s" "$fakechroot_chroot_base" "$fakechroot_chroot_line"; done`
+        fi
+        fakechroot_chroot_paths_ldsoconf="${fakechroot_chroot_paths_ldsoconf#:}"
+
+        fakechroot_chroot_paths="$fakechroot_chroot_paths${fakechroot_chroot_paths_ldsoconf:+:$fakechroot_chroot_paths_ldsoconf}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        fakechroot_chroot_paths="${fakechroot_chroot_paths#:}"
+    else
+        fakechroot_chroot_paths="$LD_LIBRARY_PATH"
     fi
-    fakechroot_chroot_paths_ldsoconf="${fakechroot_chroot_paths_ldsoconf#:}"
-
-    fakechroot_chroot_paths="$fakechroot_chroot_paths${fakechroot_chroot_paths_ldsoconf:+:$fakechroot_chroot_paths_ldsoconf}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    fakechroot_chroot_paths="${fakechroot_chroot_paths#:}"
 fi
 
 # call real chroot

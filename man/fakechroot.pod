@@ -9,6 +9,7 @@ fakechroot - gives a fake chroot environment
 
 B<fakechroot>
 S<[B<-s>|B<--use-system-libs>]>
+S<[B<-S>|B<--use-system-bins>]>
 S<[B<-l>|B<--lib> I<library>]>
 S<[B<-d>|B<--elfloader> I<ldso>]>
 S<[B<-e>|B<--environment> I<type>]>
@@ -68,6 +69,19 @@ Try this setting if you noticed following errors:
 
  $ fakechroot /usr/sbin/chroot /tmp/centos4 /bin/true
  Segmentation fault
+
+=item B<-S>|B<--use-system-bins>
+
+Use system binaries instead of chroot's binaries. This might help if attempting
+to run a chroot with a different architecture to the fakechroot library. If you
+are going to be executing setuid binaries, you must set the B<--elfloader>
+option to your architecture's dynamic linker, otherwise you will get elf class
+errors.
+
+Try this setting if you get a similar error to the following:
+
+ ERROR: ld.so: object 'libfakechroot.so' from LD_PRELOAD cannot be preloaded
+ (wrong ELF class: ELFCLASS64): ignored.
 
 =item B<-e>|B<--environment> I<type>
 

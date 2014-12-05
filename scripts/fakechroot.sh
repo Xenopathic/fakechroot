@@ -19,7 +19,7 @@ fakechroot_die () {
 fakechroot_usage () {
     fakechroot_die "Usage:
     fakechroot [-l|--lib fakechrootlib] [-d|--elfloader ldso]
-               [-s|--use-system-libs]
+               [-s|--use-system-libs] [-S|--use-system-bins]
                [-e|--environment type] [-c|--config-dir directory]
                [--] [command]
     fakechroot -v|--version
@@ -81,11 +81,11 @@ fakechroot_getopttest=`getopt --version`
 case $fakechroot_getopttest in
     getopt*)
         # GNU getopt
-        fakechroot_opts=`getopt -q -l lib: -l elfloader: -l use-system-libs -l config-dir: -l environment: -l version -l help -- +l:d:sc:e:vh "$@"`
+        fakechroot_opts=`getopt -q -l lib: -l elfloader: -l use-system-libs -l use-system-bins -l config-dir: -l environment: -l version -l help -- +l:d:sSc:e:vh "$@"`
         ;;
     *)
         # POSIX getopt ?
-        fakechroot_opts=`getopt l:d:sc:e:vh "$@"`
+        fakechroot_opts=`getopt l:d:sSc:e:vh "$@"`
         ;;
 esac
 
@@ -118,6 +118,10 @@ while [ $# -gt 0 ]; do
             ;;
         -s|--use-system-libs)
             fakechroot_paths="${fakechroot_paths:+$fakechroot_paths:}/usr/lib:/lib"
+            ;;
+        -S|--use-system-bins)
+            FAKECHROOT_SYSTEM_BINS=true
+            export FAKECHROOT_SYSTEM_BINS
             ;;
         -c|--config-dir)
             fakechroot_confdir=$1
