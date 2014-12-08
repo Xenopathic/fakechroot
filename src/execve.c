@@ -32,9 +32,9 @@
 #include "libfakechroot.h"
 #include "open.h"
 #include "setenv.h"
-#include "readlink.h"
+#include "realpath.h"
 
-#define FAKECHROOT_MAX_EXECVE_RECURSION 5
+#define FAKECHROOT_MAX_EXECVE_RECURSION 40
 
 
 /* Parse the FAKECHROOT_CMD_SUBST environment variable (the first
@@ -220,15 +220,10 @@ static int do_execve(const char * filename, char * const argv[], char * const en
     }
 
     /* Check hashbang */
-    expand_chroot_path(filename);
-    strcpy(tmp, filename);
-    filename = tmp;
-
-    if ((file = nextcall(open)(filename, O_RDONLY)) == -1) {
+    if ((file = open(filename, O_RDONLY)) == -1) {
         __set_errno(ENOENT);
         return -1;
     }
-
     i = read(file, hashbang, FAKECHROOT_PATH_MAX-2);
     close(file);
     if (i == -1) {
@@ -236,12 +231,19 @@ static int do_execve(const char * filename, char * const argv[], char * const en
         return -1;
     }
 
-    if (getenv("FAKECHROOT_SYSTEM_BINS")) {
-        filename = orig_filename;
-    }
+    expand_chroot_path(filename);
+    strcpy(tmp, filename);
+    filename = tmp;
 
     /* No hashbang in argv */
     if (hashbang[0] != '#' || hashbang[1] != '!') {
+        if (getenv("FAKECHROOT_SYSTEM_BINS")) {
+            if (!realpath(orig_filename, tmp)) {
+                return -1;
+            }
+            filename = tmp;
+        }
+
         if (!elfloader) {
             debug("nextcall(execve)(\"%s\", {\"%s\", ...}, {\"%s\", ...})", filename, argv[0], newenvp[0]);
             status = nextcall(execve)(filename, argv, newenvp);

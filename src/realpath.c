@@ -35,6 +35,7 @@
 
 #include "libfakechroot.h"
 #include "readlink.h"
+#include "realpath.h"
 
 #ifdef HAVE___LXSTAT64
 # define _LARGEFILE64_SOURCE

@@ -21,19 +21,32 @@
 #include <config.h>
 
 #include <sys/types.h>
+#include <unistd.h>
 #include <stddef.h>
+#include <string.h>
+#include <fcntl.h>
 #include "libfakechroot.h"
+
+static int is_proc_exe(const char * path) {
+    char *last_sep = strrchr(path, '/');
+    return strncmp(path, "/proc/", 6) == 0 /* begins with /proc/ */
+        && strchr(path+6, '/') == last_sep /* no / before /exe */
+        && strcmp(last_sep, "/exe") == 0;  /* ends with /exe */
+}
 
 
 wrapper(readlink, READLINK_TYPE_RETURN, (const char * path, char * buf, READLINK_TYPE_ARG3(bufsiz)))
 {
-    int linksize;
-    char tmp[FAKECHROOT_PATH_MAX], *tmpptr;
+    int linksize, fd, bytes;
+    char tmp[FAKECHROOT_PATH_MAX], *tmpptr,
+         read_buf[FAKECHROOT_PATH_MAX];
     const char *fakechroot_base = getenv("FAKECHROOT_BASE");
+    const char *fakechroot_elfloader = getenv("FAKECHROOT_ELFLOADER");
 
     debug("readlink(\"%s\", &buf, %zd)", path, bufsiz);
     expand_chroot_path(path);
 
+    debug("nextcall(readlink)(\"%s\", tmp, %zd)", path, FAKECHROOT_PATH_MAX-1);
     if ((linksize = nextcall(readlink)(path, tmp, FAKECHROOT_PATH_MAX-1)) == -1) {
         return -1;
     }
@@ -55,13 +68,32 @@ wrapper(readlink, READLINK_TYPE_RETURN, (const char * path, char * buf, READLINK
         else {
             tmpptr = tmp;
         }
-        if (strlen(tmpptr) > bufsiz) {
-            linksize = bufsiz;
+
+        /* fix /proc/.../exe for ELFLOADER operation */
+        if (fakechroot_elfloader && is_proc_exe(path)) {
+            strcpy(read_buf, path);
+            strcpy(strrchr(read_buf, '/'), "/cmdline");
+            if ((fd = open(read_buf, O_RDONLY)) > 0) {
+                bytes = read(fd, read_buf, strlen(fakechroot_elfloader)+1);
+                if (strcmp(read_buf, fakechroot_elfloader) == 0) {
+                    bytes = read(fd, read_buf, FAKECHROOT_PATH_MAX);
+                    if (bytes > 0 && strlen(read_buf) > 0) {
+                        tmpptr = read_buf;
+                        linksize = strlen(tmpptr);
+                    }
+                }
+                close(fd);
+            }
         }
-        strncpy(buf, tmpptr, linksize);
     }
     else {
-        strncpy(buf, tmp, linksize);
+        tmpptr = tmp;
     }
+
+    if (strlen(tmpptr) > bufsiz) {
+        linksize = bufsiz;
+    }
+    strncpy(buf, tmpptr, linksize);
+    debug("readlink(\"%s\", \"%s\", %zd) = %zd", path, buf, bufsiz, linksize);
     return linksize;
 }
