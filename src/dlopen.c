@@ -29,7 +29,8 @@ wrapper(dlopen, void *, (const char * filename, int flag))
 {
     debug("dlopen(\"%s\", %d)", filename, flag);
     if (strchr(filename, '/') != NULL) {
-        expand_chroot_path(filename);
+        if (!getenv("FAKECHROOT_SYSTEM_BINS"))
+            expand_chroot_path(filename);
         debug("dlopen(\"%s\", %d)", filename, flag);
     }
     return nextcall(dlopen)(filename, flag);
